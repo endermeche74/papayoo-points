@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Papayoo Pro - Compteur de Points</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --papayoo-purple: #1a1a1a;
+            --card-red: #e74c3c;
+            --card-black: #2c3e50;
+            --gold: #f1c40f;
+            --text-light: #ffffff;
+            --success: #2ecc71;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--papayoo-purple);
+            color: var(--text-light);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .nav-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid white;
+            color: white;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete { border-color: #ff4757; color: #ff4757; }
+
+        .screen { width: 100%; max-width: 600px; }
+        .hidden { display: none !important; }
+
+        /* Écran de Jeu */
+        .status-bar {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 2px solid #444;
+        }
+
+        .dice-roll-btn {
+            background: var(--gold);
+            color: black;
+            font-weight: bold;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .color-display {
+            font-size: 1.3rem;
+            font-weight: bold;
+            padding: 8px 15px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        /* Table de score */
+        .table-container { overflow-x: auto; width: 100%; }
+        table { width: 100%; border-collapse: collapse; background: rgba(0,0,0,0.2); font-size: 0.9rem; }
+        th, td { border: 1px solid rgba(255,255,255,0.1); padding: 10px; text-align: center; }
+        th { background: #333; }
+        .round-input { 
+            width: 50px; 
+            padding: 8px;
+            border-radius: 4px; 
+            border: none; 
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* Classement Final */
+        #capture-area {
+            background: var(--papayoo-purple);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .leaderboard-item {
+            background: rgba(255,255,255,0.1);
+            margin: 8px 0;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.1rem;
+        }
+        .rank-0 { border: 2px solid var(--gold); background: rgba(241, 196, 15, 0.15); }
+
+        .btn-main {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 15px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .btn-share { background: #3498db; }
+        .btn-return { background: #7f8c8d; }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-content { background: #fff; color: #333; padding: 20px; border-radius: 15px; max-width: 85%; }
+    </style>
+</head>
+<body>
+
+    <header id="main-header">
+        <button class="nav-btn" onclick="toggleModal('rules-modal')">📜 Règles</button>
+        <button class="nav-btn btn-delete" onclick="confirmReset()">🗑️ Nouvelle Partie</button>
+    </header>
+
+    <div id="setup-screen" class="screen">
+        <h1>Papayoo</h1>
+        <p>Ajoutez les noms des joueurs (3 à 8) :</p>
+        <div id="player-inputs">
+            <div style="margin-bottom:10px"><input type="text" placeholder="Joueur 1" class="player-name"></div>
+            <div style="margin-bottom:10px"><input type="text" placeholder="Joueur 2" class="player-name"></div>
+            <div style="margin-bottom:10px"><input type="text" placeholder="Joueur 3" class="player-name"></div>
+        </div>
+        <button class="nav-btn" onclick="addPlayerField()">+ Ajouter Joueur</button>
+        <button class="btn-main" onclick="startGame()">Lancer la partie</button>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+        <div class="status-bar">
+            <div id="round-counter" style="color: var(--gold); font-weight: bold; margin-bottom: 10px;">Manche 1 / ?</div>
+            <button class="dice-roll-btn" onclick="rollDice()">🎲 Tirer le Papayoo</button>
+            <div id="current-color-zone">
+                <span id="color-name" class="color-display" style="border: 1px dashed #666;">Cliquer pour tirer</span>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead><tr id="table-headers"></tr></thead>
+                <tbody id="table-body"></tbody>
+                <tfoot>
+                    <tr id="round-entry-row"></tr>
+                    <tr id="total-scores-row" style="background: rgba(255,255,255,0.1); font-weight: bold;"></tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <button class="btn-main" onclick="saveRound()">Valider la manche</button>
+    </div>
+
+    <div id="final-screen" class="screen hidden">
+        <div id="capture-area">
+            <h2 style="text-align: center; margin-top: 0;">🏆 Classement Final</h2>
+            <div id="leaderboard"></div>
+        </div>
+        
+        <button class="btn-main btn-share" onclick="shareResults()">📤 Partager le classement</button>
+        <button class="btn-main btn-return" onclick="returnToGame()">⬅️ Retourner à la partie</button>
+        <button class="btn-main" style="background: #555;" onclick="location.reload()">🔄 Nouveau Match</button>
+    </div>
+
+    <div id="rules-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Distribution & Échange</h3>
+            <table style="color: black; width: 100%; font-size: 0.8rem;">
+                <tr><th>Joueurs</th><th>Cartes</th><th>Échange</th></tr>
+                <tr><td>3</td><td>18</td><td>5</td></tr>
+                <tr><td>4</td><td>15</td><td>5</td></tr>
+                <tr><td>5</td><td>12</td><td>4</td></tr>
+                <tr><td>6</td><td>10</td><td>3</td></tr>
+            </table>
+            <p style="font-size: 0.9rem;"><strong>Score :</strong> Payoos = valeur facial. Papayoo (7 de l'enseigne tirée) = 40 pts. Total manche = 250.</p>
+            <button class="btn-main" onclick="toggleModal('rules-modal')">OK</button>
+        </div>
+    </div>
+
+    <script>
+        let players = [];
+        let currentRound = 1;
+        const suits = [
+            { name: '♠ Pique', color: '#2c3e50' },
+            { name: '♥ Cœur', color: '#e74c3c' },
+            { name: '♦ Carreau', color: '#e67e22' },
+            { name: '♣ Trèfle', color: '#27ae60' }
+        ];
+
+        function addPlayerField() {
+            const container = document.getElementById('player-inputs');
+            if(container.children.length < 8) {
+                const div = document.createElement('div');
+                div.style.marginBottom = "10px";
+                div.innerHTML = `<input type="text" placeholder="Joueur ${container.children.length + 1}" class="player-name">`;
+                container.appendChild(div);
+            }
+        }
+
+        function startGame() {
+            const inputs = document.querySelectorAll('.player-name');
+            players = Array.from(inputs)
+                .map(i => i.value.trim())
+                .filter(name => name !== "")
+                .map(name => ({ name: name, total: 0 }));
+
+            if (players.length < 3) return alert("Minimum 3 joueurs !");
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('round-counter').innerText = `Manche 1 / ${players.length}`;
+            
+            renderTableHeaders();
+            updateTotals();
+            resetRoundInputs();
+        }
+
+        function rollDice() {
+            const random = Math.floor(Math.random() * 4);
+            const choice = suits[random];
+            const display = document.getElementById('color-name');
+            display.innerText = choice.name;
+            display.style.backgroundColor = choice.color;
+            display.style.color = "white";
+        }
+
+        function renderTableHeaders() {
+            const headerRow = document.getElementById('table-headers');
+            headerRow.innerHTML = '<th>R</th>' + players.map(p => `<th>${p.name.substring(0,6)}</th>`).join('');
+        }
+
+        function resetRoundInputs() {
+            const entryRow = document.getElementById('round-entry-row');
+            entryRow.innerHTML = `<td>M${currentRound}</td>` + players.map((p, i) => 
+                `<td><input type="number" min="0" class="round-input" oninput="autoCalc()"></td>`
+            ).join('');
+        }
+
+        function autoCalc() {
+            const inputs = document.querySelectorAll('.round-input');
+            const filled = Array.from(inputs).filter(i => i.value !== "");
+            
+            if (filled.length === players.length - 1) {
+                const empty = Array.from(inputs).find(i => i.value === "");
+                const currentSum = Array.from(inputs).reduce((acc, i) => acc + (Math.max(0, parseInt(i.value) || 0)), 0);
+                empty.placeholder = Math.max(0, 250 - currentSum);
+            }
+        }
+
+        function saveRound() {
+            const inputs = document.querySelectorAll('.round-input');
+            let values = Array.from(inputs).map(i => {
+                let val = i.value === "" ? (parseInt(i.placeholder) || 0) : parseInt(i.value);
+                return Math.max(0, val); // Force pas de négatif
+            });
+
+            const sum = values.reduce((a, b) => a + b, 0);
+            
+            if(sum !== 250) {
+                alert(`ERREUR : Le total est de ${sum} au lieu de 250 !\n\nVérifiez les points (7 de l'enseigne = 40, les Payoos = 1 à 20).`);
+                return;
+            }
+
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${currentRound}</td>` + values.map(v => `<td>${v}</td>`).join('');
+            document.getElementById('table-body').appendChild(row);
+
+            players.forEach((p, i) => p.total += values[i]);
+            updateTotals();
+
+            if (currentRound >= players.length) {
+                showFinalScreen();
+            } else {
+                currentRound++;
+                document.getElementById('round-counter').innerText = `Manche ${currentRound} / ${players.length}`;
+                resetRoundInputs();
+                document.getElementById('color-name').innerText = "Cliquer pour tirer";
+                document.getElementById('color-name').style.backgroundColor = "transparent";
+            }
+        }
+
+        function updateTotals() {
+            const row = document.getElementById('total-scores-row');
+            row.innerHTML = '<td>TOT</td>' + players.map(p => `<td>${p.total}</td>`).join('');
+        }
+
+        function showFinalScreen() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('final-screen').classList.remove('hidden');
+
+            const sorted = [...players].sort((a, b) => a.total - b.total);
+            const container = document.getElementById('leaderboard');
+            const emojis = ['🥇', '🥈', '🥉', '👏', '😐', '😅', '💀', '🤡'];
+
+            container.innerHTML = sorted.map((p, i) => `
+                <div class="leaderboard-item rank-${i}">
+                    <span>${emojis[i] || '▫️'} <strong>${p.name}</strong></span>
+                    <span>${p.total} pts</span>
+                </div>
+            `).join('');
+        }
+
+        function returnToGame() {
+            document.getElementById('final-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+        }
+
+        async function shareResults() {
+            const captureArea = document.getElementById('capture-area');
+            
+            // On utilise html2canvas pour créer une image du classement uniquement
+            const canvas = await html2canvas(captureArea, { backgroundColor: '#1a1a1a' });
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], 'resultats-papayoo.png', { type: 'image/png' });
+                
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Résultats Papayoo',
+                            text: 'Voici le score de notre partie !'
+                        });
+                    } catch (err) {
+                        console.error("Erreur de partage:", err);
+                    }
+                } else {
+                    alert("Le partage n'est pas supporté sur ce navigateur. Vous pouvez faire une capture d'écran !");
+                }
+            });
+        }
+
+        function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
+        
+        function confirmReset() {
+            if(confirm("Voulez-vous vraiment effacer cette partie et recommencer ?")) location.reload();
+        }
+    </script>
+</body>
+</html>
